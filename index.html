@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breathe — Guided Breathing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Jost:wght@200;300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0f1a;
+    --surface: #111827;
+    --accent: #7eb8c9;
+    --accent2: #a8d5b5;
+    --gold: #c9a96e;
+    --text: #e8e4dc;
+    --text-muted: #8a9ab0;
+    --radius: 20px;
+  }
+
+  body {
+    font-family: 'Jost', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Animated background */
+  .bg-canvas {
+    position: fixed; inset: 0; z-index: 0;
+    background: radial-gradient(ellipse 80% 60% at 20% 30%, #0d2235 0%, transparent 60%),
+                radial-gradient(ellipse 60% 80% at 80% 70%, #0d2220 0%, transparent 60%),
+                #0a0f1a;
+  }
+  .bg-orb {
+    position: fixed; border-radius: 50%; filter: blur(80px); z-index: 0; pointer-events: none;
+    animation: orbFloat 12s ease-in-out infinite;
+  }
+  .bg-orb-1 { width: 500px; height: 500px; background: rgba(126,184,201,0.06); top: -100px; left: -100px; animation-delay: 0s; }
+  .bg-orb-2 { width: 400px; height: 400px; background: rgba(168,213,181,0.05); bottom: -50px; right: -80px; animation-delay: -6s; }
+  @keyframes orbFloat {
+    0%, 100% { transform: translate(0,0) scale(1); }
+    50% { transform: translate(30px, 20px) scale(1.1); }
+  }
+
+  /* Layout */
+  .app { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+
+  header {
+    padding: 32px 40px 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem; font-weight: 300; letter-spacing: 0.08em;
+    color: var(--text);
+  }
+  .logo span { color: var(--accent); font-style: italic; }
+
+  /* Screens */
+  .screen { display: none; flex: 1; flex-direction: column; align-items: center; padding: 40px 20px 60px; }
+  .screen.active { display: flex; }
+
+  /* Selection screen */
+  .screen-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 300;
+    text-align: center; letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+  .screen-subtitle {
+    color: var(--text-muted); font-size: 0.85rem; font-weight: 200;
+    letter-spacing: 0.12em; text-transform: uppercase; text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .exercises-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px; width: 100%; max-width: 960px;
+  }
+
+  .exercise-card {
+    background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: var(--radius); padding: 32px 28px;
+    cursor: pointer; position: relative; overflow: hidden;
+    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  .exercise-card::before {
+    content: ''; position: absolute; inset: 0; opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .exercise-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.15); }
+  .exercise-card:hover { box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+
+  .card-icon {
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem; margin-bottom: 20px;
+  }
+  .card-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.4rem; font-weight: 400; margin-bottom: 8px;
+    letter-spacing: 0.03em;
+  }
+  .card-desc { color: var(--text-muted); font-size: 0.82rem; line-height: 1.6; font-weight: 200; margin-bottom: 18px; }
+  .card-pattern {
+    display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  }
+  .pattern-pill {
+    font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 20px; font-weight: 300;
+  }
+
+  /* Color themes per exercise */
+  .theme-blue .card-icon { background: rgba(126,184,201,0.15); }
+  .theme-blue .card-name { color: #a8d4e3; }
+  .theme-blue .pattern-pill { background: rgba(126,184,201,0.12); color: #7eb8c9; }
+  .theme-blue:hover { border-color: rgba(126,184,201,0.3); box-shadow: 0 20px 60px rgba(126,184,201,0.08); }
+
+  .theme-green .card-icon { background: rgba(168,213,181,0.15); }
+  .theme-green .card-name { color: #aadbb8; }
+  .theme-green .pattern-pill { background: rgba(168,213,181,0.12); color: #a8d5b5; }
+  .theme-green:hover { border-color: rgba(168,213,181,0.3); box-shadow: 0 20px 60px rgba(168,213,181,0.08); }
+
+  .theme-gold .card-icon { background: rgba(201,169,110,0.15); }
+  .theme-gold .card-name { color: #d4b97e; }
+  .theme-gold .pattern-pill { background: rgba(201,169,110,0.12); color: #c9a96e; }
+  .theme-gold:hover { border-color: rgba(201,169,110,0.3); box-shadow: 0 20px 60px rgba(201,169,110,0.08); }
+
+  .theme-rose .card-icon { background: rgba(201,130,130,0.15); }
+  .theme-rose .card-name { color: #d4a0a0; }
+  .theme-rose .pattern-pill { background: rgba(201,130,130,0.12); color: #c98282; }
+  .theme-rose:hover { border-color: rgba(201,130,130,0.3); box-shadow: 0 20px 60px rgba(201,130,130,0.08); }
+
+  .theme-violet .card-icon { background: rgba(160,130,201,0.15); }
+  .theme-violet .card-name { color: #c0a8d8; }
+  .theme-violet .pattern-pill { background: rgba(160,130,201,0.12); color: #a082c9; }
+  .theme-violet:hover { border-color: rgba(160,130,201,0.3); box-shadow: 0 20px 60px rgba(160,130,201,0.08); }
+
+  /* Config screen */
+  .config-card {
+    background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 28px; padding: 48px; max-width: 480px; width: 100%;
+    margin: auto;
+  }
+  .config-exercise-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2rem; font-weight: 300; margin-bottom: 6px;
+  }
+  .config-exercise-desc { color: var(--text-muted); font-size: 0.82rem; margin-bottom: 40px; font-weight: 200; }
+
+  .pattern-display {
+    background: rgba(255,255,255,0.03); border-radius: 14px;
+    padding: 20px 24px; margin-bottom: 36px;
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+  }
+  .pattern-item { text-align: center; flex: 1; }
+  .pattern-item .phase { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+  .pattern-item .dur { font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 300; }
+  .pattern-item .unit { font-size: 0.75rem; color: var(--text-muted); }
+  .pattern-sep { color: rgba(255,255,255,0.15); font-size: 1.5rem; align-self: center; flex: 0; }
+
+  .duration-section label {
+    display: block; font-size: 0.75rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px;
+  }
+  .duration-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 40px; }
+  .dur-btn {
+    flex: 1; min-width: 60px; padding: 12px 8px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px; color: var(--text-muted); font-family: 'Jost', sans-serif;
+    font-size: 0.85rem; cursor: pointer; transition: all 0.2s ease;
+    font-weight: 300;
+  }
+  .dur-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+  .dur-btn.active { border-color: currentColor; color: var(--text); background: rgba(255,255,255,0.06); }
+
+  .btn-start {
+    width: 100%; padding: 18px; border: none; border-radius: 14px;
+    font-family: 'Jost', sans-serif; font-size: 0.95rem;
+    letter-spacing: 0.12em; text-transform: uppercase; font-weight: 300;
+    cursor: pointer; transition: all 0.3s ease;
+    background: linear-gradient(135deg, var(--c1, #7eb8c9), var(--c2, #a8d5b5));
+    color: #0a1520;
+  }
+  .btn-start:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(126,184,201,0.25); }
+
+  .btn-back {
+    background: none; border: none; color: var(--text-muted);
+    font-family: 'Jost', sans-serif; font-size: 0.8rem; letter-spacing: 0.1em;
+    text-transform: uppercase; cursor: pointer; display: flex; align-items: center;
+    gap: 8px; transition: color 0.2s ease; margin-bottom: 32px;
+    align-self: flex-start; padding: 0;
+  }
+  .btn-back:hover { color: var(--text); }
+
+  /* Exercise screen */
+  #screen-exercise {
+    justify-content: center;
+  }
+  .exercise-wrapper {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 0; width: 100%; max-width: 500px;
+  }
+
+  .exercise-header {
+    text-align: center; margin-bottom: 48px; width: 100%;
+  }
+  .exercise-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.4rem; font-weight: 300; color: var(--text-muted);
+    letter-spacing: 0.08em;
+  }
+  .time-remaining {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 3rem; font-weight: 300; line-height: 1;
+    margin-top: 4px;
+  }
+
+  /* Circle animator */
+  .circle-container {
+    position: relative; width: 280px; height: 280px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .circle-rings {
+    position: absolute; inset: 0;
+  }
+  .ring {
+    position: absolute; border-radius: 50%; border: 1px solid;
+  }
+  .ring-outer {
+    inset: 0; border-color: rgba(255,255,255,0.04);
+  }
+  .ring-mid {
+    inset: 20px; border-color: rgba(255,255,255,0.06);
+  }
+  .ring-track {
+    inset: 40px; border-color: rgba(255,255,255,0.05);
+  }
+
+  .circle-svg {
+    position: absolute; inset: 40px; width: calc(100% - 80px); height: calc(100% - 80px);
+  }
+  .circle-progress {
+    fill: none; stroke-width: 1.5;
+    stroke-linecap: round;
+    transform: rotate(-90deg); transform-origin: center;
+    transition: stroke-dashoffset 0.1s linear, stroke 0.5s ease;
+  }
+
+  .circle-blob {
+    position: absolute; border-radius: 50%;
+    transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1),
+                background 0.8s ease,
+                box-shadow 0.8s ease;
+    will-change: transform;
+  }
+  .blob-inner {
+    width: 110px; height: 110px;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    background: radial-gradient(circle, var(--blob-c1, #7eb8c9), var(--blob-c2, #4a8fa0));
+    box-shadow: 0 0 60px rgba(126,184,201,0.3);
+    z-index: 2;
+  }
+  .blob-outer {
+    width: 170px; height: 170px;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.25;
+    z-index: 1;
+  }
+  .blob-glow {
+    width: 240px; height: 240px;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.08;
+    z-index: 0;
+  }
+
+  .phase-label {
+    position: absolute; bottom: -60px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2rem; font-weight: 300; letter-spacing: 0.06em;
+    text-align: center; width: 280px; left: 50%; transform: translateX(-50%);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .phase-count {
+    position: absolute; bottom: -92px;
+    font-size: 1rem; color: var(--text-muted); letter-spacing: 0.05em;
+    text-align: center; width: 280px; left: 50%; transform: translateX(-50%);
+    font-weight: 200;
+  }
+
+  /* Bottom controls */
+  .exercise-controls {
+    margin-top: 120px; display: flex; gap: 16px; align-items: center;
+  }
+  .ctrl-btn {
+    padding: 14px 32px; border-radius: 40px;
+    font-family: 'Jost', sans-serif; font-size: 0.8rem;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s ease; font-weight: 300;
+  }
+  .ctrl-pause {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text);
+  }
+  .ctrl-pause:hover { background: rgba(255,255,255,0.1); }
+  .ctrl-stop {
+    background: none; border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-muted);
+  }
+  .ctrl-stop:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+
+  /* Progress bar */
+  .session-bar {
+    width: 280px; height: 2px; background: rgba(255,255,255,0.06);
+    border-radius: 2px; margin-top: 32px; overflow: hidden;
+  }
+  .session-fill {
+    height: 100%; border-radius: 2px;
+    transition: width 1s linear, background 0.5s ease;
+    background: var(--accent);
+  }
+
+  /* Done screen */
+  #screen-done {
+    justify-content: center; text-align: center;
+  }
+  .done-icon { font-size: 3rem; margin-bottom: 24px; }
+  .done-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.8rem; font-weight: 300; margin-bottom: 12px;
+  }
+  .done-sub { color: var(--text-muted); font-weight: 200; font-size: 0.9rem; margin-bottom: 48px; }
+  .done-stats {
+    display: flex; gap: 40px; justify-content: center; margin-bottom: 48px;
+  }
+  .stat-item .val {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.4rem; font-weight: 300;
+  }
+  .stat-item .lbl { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
+  .btn-again {
+    padding: 16px 48px; border-radius: 40px; border: none;
+    font-family: 'Jost', sans-serif; font-size: 0.82rem;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer; font-weight: 300;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #0a1520; margin-right: 12px;
+    transition: all 0.3s ease;
+  }
+  .btn-again:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(126,184,201,0.2); }
+  .btn-home {
+    padding: 16px 48px; border-radius: 40px;
+    background: none; border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-muted); font-family: 'Jost', sans-serif;
+    font-size: 0.82rem; letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer; font-weight: 300; transition: all 0.2s ease;
+  }
+  .btn-home:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+
+  /* Ripple animation on exercise */
+  @keyframes ripple {
+    0% { transform: translate(-50%,-50%) scale(1); opacity: 0.15; }
+    100% { transform: translate(-50%,-50%) scale(2.2); opacity: 0; }
+  }
+  .ripple-ring {
+    position: absolute; width: 200px; height: 200px;
+    left: 50%; top: 50%;
+    border-radius: 50%; border: 1px solid var(--accent);
+    transform: translate(-50%,-50%);
+    animation: ripple 4s ease-out infinite;
+    pointer-events: none;
+  }
+  .ripple-ring:nth-child(2) { animation-delay: 1.3s; }
+  .ripple-ring:nth-child(3) { animation-delay: 2.6s; }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .exercise-card {
+    animation: fadeInUp 0.5s ease both;
+  }
+  .exercise-card:nth-child(1) { animation-delay: 0.05s; }
+  .exercise-card:nth-child(2) { animation-delay: 0.1s; }
+  .exercise-card:nth-child(3) { animation-delay: 0.15s; }
+  .exercise-card:nth-child(4) { animation-delay: 0.2s; }
+  .exercise-card:nth-child(5) { animation-delay: 0.25s; }
+</style>
+</head>
+<body>
+
+<div class="bg-canvas"></div>
+<div class="bg-orb bg-orb-1"></div>
+<div class="bg-orb bg-orb-2"></div>
+
+<div class="app">
+  <header>
+    <div class="logo">Breath<span>e</span></div>
+  </header>
+
+  <!-- SELECTION SCREEN -->
+  <div class="screen active" id="screen-select">
+    <p class="screen-title" style="margin-top:40px">Choose your practice</p>
+    <p class="screen-subtitle">Select an exercise to begin</p>
+    <div class="exercises-grid" id="exercises-grid"></div>
+  </div>
+
+  <!-- CONFIG SCREEN -->
+  <div class="screen" id="screen-config">
+    <button class="btn-back" onclick="showScreen('select')">← Back</button>
+    <div class="config-card" id="config-card">
+      <div class="config-exercise-name" id="cfg-name"></div>
+      <div class="config-exercise-desc" id="cfg-desc"></div>
+      <div class="pattern-display" id="cfg-pattern"></div>
+      <div class="duration-section">
+        <label>Session duration</label>
+        <div class="duration-row" id="duration-row"></div>
+      </div>
+      <button class="btn-start" id="btn-start" onclick="startExercise()">Begin Session</button>
+    </div>
+  </div>
+
+  <!-- EXERCISE SCREEN -->
+  <div class="screen" id="screen-exercise">
+    <div class="exercise-wrapper">
+      <div class="exercise-header">
+        <div class="exercise-title" id="ex-title"></div>
+        <div class="time-remaining" id="ex-time"></div>
+      </div>
+
+      <div class="circle-container">
+        <div class="circle-rings">
+          <div class="ring ring-outer"></div>
+          <div class="ring ring-mid"></div>
+          <div class="ring ring-track"></div>
+        </div>
+        <svg class="circle-svg" viewBox="0 0 100 100" id="progress-svg">
+          <circle class="circle-progress" id="progress-circle" cx="50" cy="50" r="46"
+            stroke-dasharray="289" stroke-dashoffset="0" stroke="#7eb8c9"/>
+        </svg>
+        <div class="ripple-ring"></div>
+        <div class="ripple-ring"></div>
+        <div class="ripple-ring"></div>
+        <div class="circle-blob blob-glow" id="blob-glow"
+          style="background: radial-gradient(circle, rgba(126,184,201,0.5), transparent)"></div>
+        <div class="circle-blob blob-outer" id="blob-outer"
+          style="background: radial-gradient(circle, rgba(126,184,201,0.6), rgba(74,143,160,0.3))"></div>
+        <div class="circle-blob blob-inner" id="blob-inner"></div>
+        <div class="phase-label" id="phase-label">Inhale</div>
+        <div class="phase-count" id="phase-count">4</div>
+      </div>
+
+      <div class="session-bar">
+        <div class="session-fill" id="session-fill" style="width:0%"></div>
+      </div>
+
+      <div class="exercise-controls">
+        <button class="ctrl-btn ctrl-pause" id="btn-pause" onclick="togglePause()">Pause</button>
+        <button class="ctrl-btn ctrl-stop" onclick="stopExercise()">End Session</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DONE SCREEN -->
+  <div class="screen" id="screen-done">
+    <div class="done-icon">✦</div>
+    <div class="done-title">Well done</div>
+    <div class="done-sub">Your session is complete. Take a moment to notice how you feel.</div>
+    <div class="done-stats">
+      <div class="stat-item">
+        <div class="val" id="done-duration">—</div>
+        <div class="lbl">Minutes</div>
+      </div>
+      <div class="stat-item">
+        <div class="val" id="done-cycles">—</div>
+        <div class="lbl">Cycles</div>
+      </div>
+      <div class="stat-item">
+        <div class="val" id="done-exercise">—</div>
+        <div class="lbl">Exercise</div>
+      </div>
+    </div>
+    <div>
+      <button class="btn-again" onclick="repeatExercise()">Repeat</button>
+      <button class="btn-home" onclick="showScreen('select')">Home</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const EXERCISES = [
+  {
+    id: 'cardiac',
+    name: 'Cardiac Coherence',
+    desc: 'Synchronize your heart and breath to achieve optimal psychophysiological balance. Ideal for stress relief and emotional regulation.',
+    phases: [
+      { label: 'Inhale', dur: 4, type: 'in' },
+      { label: 'Exhale', dur: 6, type: 'out' }
+    ],
+    theme: 'blue',
+    icon: '♡',
+    gradient: ['#7eb8c9', '#4a9ab5'],
+  },
+  {
+    id: 'box',
+    name: 'Box Breathing',
+    desc: 'Used by Navy SEALs and elite athletes. Equal phases create a square pattern that calms the nervous system and sharpens focus.',
+    phases: [
+      { label: 'Inhale', dur: 4, type: 'in' },
+      { label: 'Hold', dur: 4, type: 'hold-in' },
+      { label: 'Exhale', dur: 4, type: 'out' },
+      { label: 'Hold', dur: 4, type: 'hold-out' }
+    ],
+    theme: 'green',
+    icon: '◻',
+    gradient: ['#a8d5b5', '#5eab7a'],
+  },
+  {
+    id: '478',
+    name: '4-7-8 Relaxation',
+    desc: 'Dr. Andrew Weil\'s natural tranquilizer. The extended exhale activates the parasympathetic system for deep calm and better sleep.',
+    phases: [
+      { label: 'Inhale', dur: 4, type: 'in' },
+      { label: 'Hold', dur: 7, type: 'hold-in' },
+      { label: 'Exhale', dur: 8, type: 'out' }
+    ],
+    theme: 'gold',
+    icon: '✦',
+    gradient: ['#c9a96e', '#b07d35'],
+  },
+  {
+    id: 'resonance',
+    name: 'Resonance Breathing',
+    desc: 'Breathe at 5 cycles per minute — your resonance frequency. Maximizes heart rate variability and promotes deep inner stillness.',
+    phases: [
+      { label: 'Inhale', dur: 6, type: 'in' },
+      { label: 'Exhale', dur: 6, type: 'out' }
+    ],
+    theme: 'violet',
+    icon: '∿',
+    gradient: ['#a082c9', '#6b4fa8'],
+  },
+  {
+    id: 'energize',
+    name: 'Energizing Breath',
+    desc: 'Short, powerful cycles to boost alertness and energy. Activates the sympathetic system to sharpen mental clarity and vitality.',
+    phases: [
+      { label: 'Inhale', dur: 3, type: 'in' },
+      { label: 'Exhale', dur: 2, type: 'out' }
+    ],
+    theme: 'rose',
+    icon: '⚡',
+    gradient: ['#c98282', '#a04a4a'],
+  }
+];
+
+let currentExercise = null;
+let selectedDuration = 5; // minutes
+let timer = null;
+let sessionStart = null;
+let sessionDurationMs = 0;
+let phaseIndex = 0;
+let phaseElapsed = 0;
+let totalCycles = 0;
+let paused = false;
+let lastTick = null;
+let frameId = null;
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+}
+
+// Build exercise cards
+function buildCards() {
+  const grid = document.getElementById('exercises-grid');
+  grid.innerHTML = EXERCISES.map(ex => `
+    <div class="exercise-card theme-${ex.theme}" onclick="selectExercise('${ex.id}')">
+      <div class="card-icon">${ex.icon}</div>
+      <div class="card-name">${ex.name}</div>
+      <div class="card-desc">${ex.desc}</div>
+      <div class="card-pattern">
+        ${ex.phases.map(p => `<div class="pattern-pill">${p.label} ${p.dur}s</div>`).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectExercise(id) {
+  currentExercise = EXERCISES.find(e => e.id === id);
+  selectedDuration = 5;
+
+  document.getElementById('cfg-name').textContent = currentExercise.name;
+  document.getElementById('cfg-desc').textContent = currentExercise.desc;
+
+  // Pattern display
+  const pat = document.getElementById('cfg-pattern');
+  pat.innerHTML = currentExercise.phases.map((p, i) => {
+    const sep = i < currentExercise.phases.length - 1 ? '<div class="pattern-sep">·</div>' : '';
+    return `<div class="pattern-item">
+      <div class="phase">${p.label}</div>
+      <div class="dur">${p.dur}</div>
+      <div class="unit">seconds</div>
+    </div>${sep}`;
+  }).join('');
+
+  // Duration buttons
+  const durs = [1, 2, 3, 5, 7, 10];
+  const row = document.getElementById('duration-row');
+  row.innerHTML = durs.map(d => `
+    <button class="dur-btn ${d === selectedDuration ? 'active' : ''}" 
+      onclick="setDuration(${d}, this)">${d} min</button>
+  `).join('');
+
+  // Theme color on start button
+  const btn = document.getElementById('btn-start');
+  btn.style.setProperty('--c1', currentExercise.gradient[0]);
+  btn.style.setProperty('--c2', currentExercise.gradient[1]);
+
+  showScreen('config');
+}
+
+function setDuration(val, el) {
+  selectedDuration = val;
+  document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function startExercise() {
+  phaseIndex = 0;
+  phaseElapsed = 0;
+  totalCycles = 0;
+  paused = false;
+  sessionDurationMs = selectedDuration * 60 * 1000;
+  sessionStart = performance.now();
+
+  document.getElementById('ex-title').textContent = currentExercise.name;
+  updateBlobColors();
+  updatePhaseUI();
+
+  showScreen('exercise');
+  lastTick = performance.now();
+  tick();
+}
+
+function updateBlobColors() {
+  const [c1, c2] = currentExercise.gradient;
+  const inner = document.getElementById('blob-inner');
+  const outer = document.getElementById('blob-outer');
+  const glow = document.getElementById('blob-glow');
+  inner.style.background = `radial-gradient(circle, ${c1}, ${c2})`;
+  inner.style.boxShadow = `0 0 60px ${c1}55`;
+  outer.style.background = `radial-gradient(circle, ${c1}99, ${c2}55)`;
+  glow.style.background = `radial-gradient(circle, ${c1}80, transparent)`;
+  document.getElementById('session-fill').style.background = c1;
+  const ripples = document.querySelectorAll('.ripple-ring');
+  ripples.forEach(r => r.style.borderColor = c1);
+  document.getElementById('progress-circle').style.stroke = c1;
+}
+
+function tick() {
+  if (paused) return;
+  const now = performance.now();
+  const dt = now - lastTick;
+  lastTick = now;
+
+  const elapsed = now - sessionStart;
+  const remaining = sessionDurationMs - elapsed;
+
+  if (remaining <= 0) {
+    finishExercise(elapsed);
+    return;
+  }
+
+  // Session progress
+  const pct = (elapsed / sessionDurationMs) * 100;
+  document.getElementById('session-fill').style.width = pct + '%';
+
+  // Time display
+  const remSec = Math.ceil(remaining / 1000);
+  const m = Math.floor(remSec / 60);
+  const s = remSec % 60;
+  document.getElementById('ex-time').textContent = `${m}:${s.toString().padStart(2,'0')}`;
+
+  // Phase logic
+  const phase = currentExercise.phases[phaseIndex];
+  phaseElapsed += dt / 1000;
+  const phaseProgress = Math.min(phaseElapsed / phase.dur, 1);
+
+  // Update countdown
+  const phaseLeft = Math.ceil(phase.dur - phaseElapsed);
+  document.getElementById('phase-count').textContent = Math.max(phaseLeft, 1);
+
+  // Update blob scale
+  let scale;
+  if (phase.type === 'in') {
+    scale = 0.7 + phaseProgress * 0.6;
+  } else if (phase.type === 'out') {
+    scale = 1.3 - phaseProgress * 0.6;
+  } else if (phase.type === 'hold-in') {
+    scale = 1.3;
+  } else {
+    scale = 0.7;
+  }
+
+  const inner = document.getElementById('blob-inner');
+  const outer = document.getElementById('blob-outer');
+  const glow = document.getElementById('blob-glow');
+  inner.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  outer.style.transform = `translate(-50%, -50%) scale(${scale * 1.0})`;
+  glow.style.transform = `translate(-50%, -50%) scale(${scale * 0.85})`;
+
+  // Progress arc (per phase)
+  const circumference = 289;
+  const offset = circumference * (1 - phaseProgress);
+  document.getElementById('progress-circle').style.strokeDashoffset = offset;
+
+  // Move to next phase
+  if (phaseElapsed >= phase.dur) {
+    phaseElapsed -= phase.dur;
+    phaseIndex = (phaseIndex + 1) % currentExercise.phases.length;
+    if (phaseIndex === 0) totalCycles++;
+    updatePhaseUI();
+  }
+
+  frameId = requestAnimationFrame(tick);
+}
+
+function updatePhaseUI() {
+  const phase = currentExercise.phases[phaseIndex];
+  document.getElementById('phase-label').textContent = phase.label;
+  document.getElementById('phase-count').textContent = phase.dur;
+}
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById('btn-pause').textContent = paused ? 'Resume' : 'Pause';
+  if (!paused) {
+    lastTick = performance.now();
+    tick();
+  }
+}
+
+function stopExercise() {
+  if (frameId) cancelAnimationFrame(frameId);
+  const elapsed = performance.now() - sessionStart;
+  finishExercise(elapsed);
+}
+
+function finishExercise(elapsedMs) {
+  if (frameId) cancelAnimationFrame(frameId);
+  const mins = Math.floor(elapsedMs / 60000);
+  const secs = Math.floor((elapsedMs % 60000) / 1000);
+  document.getElementById('done-duration').textContent = mins > 0 ? mins : `${secs}s`;
+  document.getElementById('done-cycles').textContent = totalCycles;
+  document.getElementById('done-exercise').textContent = currentExercise.icon;
+  showScreen('done');
+}
+
+function repeatExercise() {
+  startExercise();
+}
+
+buildCards();
+</script>
+</body>
+</html>
